@@ -1,0 +1,119 @@
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import { AuthGuard } from '../auth/auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
+import { UploadsService } from './uploads.service';
+
+interface UploadedImage {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
+  size: number;
+}
+
+@ApiTags('uploads')
+@Controller('uploads')
+export class UploadsController {
+  constructor(private readonly uploads: UploadsService) {}
+
+  @Post('images')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiQuery({ name: 'folder', required: false, example: 'services' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiCreatedResponse({ description: 'Uploads an image to MinIO and returns its URL.' })
+  uploadImage(@UploadedFile() file: UploadedImage | undefined, @Query('folder') folder = 'images') {
+    if (!file) throw new BadRequestException('Image file is required');
+    return this.uploads.uploadImage(file, folder);
+  }
+
+  @Post('files')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiQuery({ name: 'folder', required: false, example: 'agreements' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiCreatedResponse({ description: 'Uploads a file to MinIO and returns its URL.' })
+  uploadFile(@UploadedFile() file: UploadedImage | undefined, @Query('folder') folder = 'files') {
+    if (!file) throw new BadRequestException('File is required');
+    return this.uploads.uploadFile(file, folder);
+  }
+
+  @Get('images/:folder/:date/:file')
+  async getDatedImage(
+    @Param('folder') folder: string,
+    @Param('date') date: string,
+    @Param('file') file: string,
+    @Res() res: Response,
+  ) {
+    return this.streamImage(`${folder}/${date}/${file}`, res);
+  }
+
+  @Get('images/*')
+  async getImage(@Req() req: Request, @Res() res: Response) {
+    const marker = '/uploads/images/';
+    const requestPath = req.originalUrl.split('?')[0] ?? '';
+    const markerIndex = requestPath.indexOf(marker);
+    const encodedKey = markerIndex >= 0 ? requestPath.slice(markerIndex + marker.length) : '';
+    const key = decodeURIComponent(encodedKey);
+    return this.streamImage(key, res);
+  }
+
+  @Get('files/*')
+  async getFile(@Req() req: Request, @Res() res: Response) {
+    const marker = '/uploads/files/';
+    const requestPath = req.originalUrl.split('?')[0] ?? '';
+    const markerIndex = requestPath.indexOf(marker);
+    const encodedKey = markerIndex >= 0 ? requestPath.slice(markerIndex + marker.length) : '';
+    return this.streamImage(decodeURIComponent(encodedKey), res);
+  }
+
+  private async streamImage(key: string, res: Response) {
+    const image = await this.uploads.getImage(key);
+
+    res.setHeader('Content-Type', image.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    if (image.size) res.setHeader('Content-Length', String(image.size));
+
+    return image.stream.pipe(res);
+  }
+}

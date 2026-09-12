@@ -1,0 +1,903 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  BLOG
+  VENDOR
+  CUSTOMER
+  AFFILIATE
+}
+
+enum VendorStatus {
+  PENDING_VERIFICATION
+  APPROVED
+  SUSPENDED
+  REJECTED
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  REJECTED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  BLOCKED
+  OFFLINE_BOOKING
+}
+
+enum CartItemType {
+  SERVICE
+  PACKAGE
+}
+
+enum BookingStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PAYMENT_RECEIVED
+  VENDOR_REVIEW
+  VENDOR_ACCEPTED
+  CUSTOMER_CONFIRMATION
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  PAYTABS
+  CHECKOUT_COM
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT_METHOD
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  ADVANCE
+  REMAINING
+  FULL
+}
+
+enum CouponType {
+  FLAT
+  PERCENTAGE
+}
+
+enum PromotionDiscountType {
+  FLAT
+  PERCENTAGE
+}
+
+enum ReviewStatus {
+  PENDING_APPROVAL
+  PUBLISHED
+  REJECTED
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SettlementStatus {
+  PENDING_PAYOUT
+  PAID
+  ON_HOLD
+  CANCELLED
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_ADMIN
+  WAITING_FOR_VENDOR
+  RESOLVED
+  CLOSED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone        String?  @unique
+  passwordHash String?
+  role         UserRole
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  vendor       Vendor?
+  carts        Cart[]
+  bookings     Booking[]
+  reviews      Review[]
+  customerCarts CustomerCart[] @relation("CustomerCarts")
+  customerCartItems CustomerCartItem[] @relation("CustomerCartItems")
+  customerCheckouts CustomerCheckout[] @relation("CustomerCheckouts")
+  customerBookings CustomerBooking[] @relation("CustomerBookings")
+  passwordResetTokens PasswordResetToken[]
+  supportTicketsCreated SupportTicket[] @relation("SupportTicketCreator")
+  supportMessagesAuthored SupportMessage[] @relation("SupportMessageAuthor")
+  rolePermissionsUpdated RolePermission[] @relation("RolePermissionsUpdatedBy")
+
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model Vendor {
+  id                 String       @id @default(cuid())
+  userId             String?      @unique
+  oldVendorId        String?      @unique @map("old_vendor_id")
+  companyName        String
+  contactPerson      String
+  email              String       @unique
+  phone              String
+  phoneCountryCode   String
+  about              String?
+  firstName          String?
+  lastName           String?
+  userName           String?      @unique
+  primaryEmail       String?
+  telephone          String?
+  primaryMobile      String?
+  primaryMobileCountryCode String
+  specialization     String?
+  vendorType         String?
+  contractType       String?
+  hourlyRate         Int?
+  availableHoursPerWeek Int?
+  projectRate        Int?
+  salaryType         String?
+  basicSalary        Int?
+  housingAllowance   Int?
+  transportationAllowance Int?
+  otherAllowances    Int?
+  annualLeaves       Int?
+  workingHours       Int?
+  joiningDate        DateTime?
+  businessLocation   String?
+  visaType           String?
+  address            String?
+  addressLine1       String
+  addressLine2       String
+  landmark           String?
+  poBox              String
+  vendorProfileImage String?
+  tradeLicenseNumber String?
+  tradeLicenseExpiry DateTime?
+  tradeLicenseFileUrl String?
+  tradeLicenseFileKey String?
+  passportExpiry     DateTime?
+  passportFileUrl    String?
+  passportFileKey    String?
+  emiratesIdExpiry   DateTime?
+  vatNumber          String?
+  updatedProfile     Boolean      @default(false)
+  status             VendorStatus @default(PENDING_VERIFICATION)
+  cities             String[]
+  capacityPerDay     Int          @default(1)
+  commissionPercent  Decimal      @db.Decimal(5, 2)
+  planDetails        String?
+  planExpiry         DateTime?
+  agreementFileUrl   String?
+  agreementFileKey   String?
+  bankName           String?
+  accountFullName    String?
+  ibanNo             String?
+  accountNumber      String?
+  swift              String?
+  branchAddress      String?
+  appleId            String?
+  deviceToken        String?
+  estCardExpiry      String?
+  facebookId         String?
+  googleId           String?
+  imageUrl           Json?
+  inviteCode         String?
+  isBlocked          Boolean?
+  isDeleted          Boolean?
+  isPremium          Int?
+  isVerified         Boolean?
+  noOfPartners       Int?
+  password           String?
+  tradeExpiry        String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  user               User?        @relation(fields: [userId], references: [id])
+  documents          VendorDocument[]
+  services           VendorService[]
+  packages           EventPackage[]
+  availability       VendorAvailability[]
+  settlements        Settlement[]
+  supportTickets     SupportTicket[]
+
+  @@map("vendors")
+}
+
+model VendorDocument {
+  id        String   @id @default(cuid())
+  vendorId  String
+  type      String
+  fileKey   String
+  fileUrl   String?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+
+  @@map("vendor_documents")
+}
+
+model SupportTicket {
+  id             String              @id @default(cuid())
+  vendorId       String
+  createdByUserId String
+  subject        String
+  description    String?
+  status         SupportTicketStatus  @default(OPEN)
+  lastMessageAt  DateTime            @default(now())
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  vendor         Vendor              @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  createdBy      User                @relation("SupportTicketCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  messages       SupportMessage[]
+
+  @@index([vendorId, status, lastMessageAt])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id            String   @id @default(cuid())
+  ticketId      String
+  authorUserId  String
+  body          String
+  attachments   String[]  @default([])
+  createdAt     DateTime  @default(now())
+
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author        User          @relation("SupportMessageAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("support_messages")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  parentId  String?
+  image     String?
+  showInHomePage Boolean @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  services  VendorService[]
+  packages  EventPackage[]
+
+  @@map("categories")
+}
+
+model Country {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique
+  name            String
+  defaultCurrency String
+  flag            String?
+  currencySymbol  String?
+  phoneCode       String?
+  status          String   @default("Active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  states          StateMaster[]
+  cities          CityMaster[]
+
+  @@map("countries")
+}
+
+model StateMaster {
+  id        String   @id @default(cuid())
+  countryId Int
+  name      String
+  code      String?
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country   Country   @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  cities    CityMaster[]
+
+  @@unique([countryId, name])
+  @@unique([countryId, code])
+  @@index([countryId, status])
+  @@map("state_masters")
+}
+
+model VisaTypeMaster {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("visa_type_masters")
+}
+
+model CityMaster {
+  id        String   @id @default(cuid())
+  countryId Int
+  stateId   String
+  name      String
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country   Country   @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  state     StateMaster @relation(fields: [stateId], references: [id], onDelete: Cascade)
+
+  @@unique([stateId, name])
+  @@index([countryId, stateId, status])
+  @@map("city_masters")
+}
+
+model EventSlot {
+  id        Int      @id @default(autoincrement())
+  name      String
+  startTime String
+  endTime   String
+  duration  String
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("event_slots")
+}
+
+model EmailTemplate {
+  id        Int      @id @default(autoincrement())
+  name      String
+  subject   String
+  trigger   String
+  body      String
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_templates")
+}
+
+model PriceUnitMaster {
+  id                   String   @id @default(cuid())
+  code                 String   @unique
+  label                String
+  minValue             Int?
+  maxValue             Int?
+  isActive             Boolean  @default(true)
+  sortOrder            Int      @default(0)
+  requiresHourRange    Boolean  @default(false)
+  requiresPersonRange  Boolean  @default(false)
+  requiresPieceRange   Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("price_unit_masters")
+}
+
+model VendorService {
+  id          String        @id @default(cuid())
+  vendorId    String
+  categoryId  String
+  slug        String?       @unique
+  title       String
+  description String
+  city        String
+  minPrice    Int           @map("amount")
+  maxPrice    Int?          @map("maxAmount")
+  currency    String        @default("AED")
+  priceUnit   String        @default("per event")
+  imageUrl    String?
+  tags        String[]
+  gallery     String[]
+  features    String[]
+  status      ListingStatus @default(ACTIVE)
+  showOnPromotionalPage Boolean    @default(false) @map("showOnHomepage")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  vendor      Vendor        @relation(fields: [vendorId], references: [id])
+  category    Category      @relation(fields: [categoryId], references: [id])
+  subServices VendorSubService[]
+  packageItems PackageItem[]
+
+  @@unique([vendorId, title])
+  @@index([categoryId, city, status])
+  @@map("vendor_services")
+}
+
+model VendorSubService {
+  id          String        @id @default(cuid())
+  serviceId   String
+  title       String
+  description String
+  amount      Int
+  currency    String        @default("AED")
+  imageUrl    String?
+  status      ListingStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  service     VendorService @relation(fields: [serviceId], references: [id])
+
+  @@unique([serviceId, title])
+  @@index([serviceId, status])
+  @@map("vendor_sub_services")
+}
+
+model EventPackage {
+  id          String        @id @default(cuid())
+  vendorId    String
+  categoryId  String?
+  title       String
+  description String
+  exactPrice  Int           @map("amount")
+  currency    String        @default("AED")
+  priceUnit   String        @default("per event")
+  inclusions  String[]
+  features    String[]
+  imageUrl    String?
+  vendorPhone String?
+  maxGuests   Int?
+  durationHours Int?
+  minDays     Int?
+  maxDays     Int?
+  minHours    Int?
+  maxHours    Int?
+  minPersons  Int?
+  maxPersons  Int?
+  minPieces   Int?
+  maxPieces   Int?
+  isPopular   Boolean       @default(false)
+  showOnPromotionalPage Boolean    @default(false) @map("showOnHomepage")
+  isPromotional Boolean     @default(false)
+  promotionDiscountType PromotionDiscountType?
+  promotionDiscountValue Int?
+  promotionStartDate DateTime?
+  promotionEndDate DateTime?
+  isRental    Boolean       @default(false)
+  rentalLocation String?
+  rentalLocationId String?
+  serviceArea String?
+  deliveryRadius Int?
+  deliveryFeeType String?
+  deliveryFee Int?
+  pickupAvailable Boolean?
+  deliveryAvailable Boolean?
+  requiresDeposit Boolean?
+  depositAmount Int?
+  status      ListingStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  vendor      Vendor        @relation(fields: [vendorId], references: [id])
+  category    Category?     @relation(fields: [categoryId], references: [id])
+  items       PackageItem[]
+  customerCartItems CustomerCartItem[] @relation("PackageCustomerCartItems")
+  customerBookings CustomerBooking[] @relation("PackageCustomerBookings")
+
+  @@unique([vendorId, title])
+  @@index([categoryId, status])
+  @@map("event_packages")
+}
+
+model PackageItem {
+  id        String @id @default(cuid())
+  packageId String
+  serviceId String
+
+  package   EventPackage  @relation(fields: [packageId], references: [id])
+  service   VendorService @relation(fields: [serviceId], references: [id])
+
+  @@unique([packageId, serviceId])
+  @@map("package_items")
+}
+
+model VendorAvailability {
+  id          String             @id @default(cuid())
+  vendorId    String
+  date        DateTime           @db.Date
+  status      AvailabilityStatus
+  capacity    Int                @default(1)
+  bookedCount Int                @default(0)
+  note        String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  vendor      Vendor             @relation(fields: [vendorId], references: [id])
+
+  @@unique([vendorId, date])
+  @@map("vendor_availability")
+}
+
+model Cart {
+  id         String     @id @default(cuid())
+  customerId String     @unique
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  customer   User       @relation(fields: [customerId], references: [id])
+  items      CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String       @id @default(cuid())
+  cartId    String
+  type      CartItemType
+  itemId    String
+  eventDate DateTime     @db.Date
+  quantity  Int          @default(1)
+
+  cart      Cart         @relation(fields: [cartId], references: [id])
+
+  @@map("cart_items")
+}
+
+model Booking {
+  id                  String        @id @default(cuid())
+  customerId          String
+  status              BookingStatus @default(PENDING_PAYMENT)
+  eventAddress        String
+  notes               String?
+  couponCode          String?
+  subtotalAmount      Int
+  discountAmount      Int           @default(0)
+  totalAmount         Int
+  advanceDueAmount    Int
+  remainingDueAmount  Int
+  currency            String        @default("AED")
+  vendorAcceptedAt    DateTime?
+  customerConfirmedAt DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  cancelReason        String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  customer            User          @relation(fields: [customerId], references: [id])
+  items               BookingItem[]
+  payments            Payment[]
+  refunds             Refund[]
+  reviews             Review[]
+  settlements         Settlement[]
+
+  @@index([customerId, status])
+  @@map("bookings")
+}
+
+model BookingItem {
+  id         String       @id @default(cuid())
+  bookingId  String
+  vendorId   String
+  type       CartItemType
+  itemId     String
+  title      String
+  eventDate  DateTime     @db.Date
+  quantity   Int
+  unitAmount Int
+  currency   String       @default("AED")
+
+  booking    Booking      @relation(fields: [bookingId], references: [id])
+
+  @@index([vendorId, eventDate])
+  @@map("booking_items")
+}
+
+model CustomerCart {
+  id        String             @id @default(cuid())
+  userId    String             @unique
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user      User               @relation("CustomerCarts", fields: [userId], references: [id], onDelete: Cascade)
+  items     CustomerCartItem[]
+
+  @@map("customer_carts")
+}
+
+model CustomerCartItem {
+  id         String        @id @default(cuid())
+  cartId     String
+  userId     String
+  packageId  String
+  vendorId   String
+  title      String
+  category   String
+  quantity   Int           @default(1)
+  unitPrice  Int
+  priceUnit  String
+  totalPrice Int
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  cart       CustomerCart  @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  user       User          @relation("CustomerCartItems", fields: [userId], references: [id], onDelete: Cascade)
+  package    EventPackage  @relation("PackageCustomerCartItems", fields: [packageId], references: [id], onDelete: Restrict)
+
+  @@unique([cartId, packageId])
+  @@index([userId])
+  @@index([packageId])
+  @@map("customer_cart_items")
+}
+
+model CustomerCheckout {
+  id             String            @id @default(cuid())
+  orderId        String            @unique
+  userId         String
+  eventDate      DateTime          @db.Date
+  eventType      String
+  guestCount     Int
+  message        String?
+  paymentMethod  String
+  paymentStatus  String            @default("Pending")
+  bookingStatus  String            @default("Pending")
+  subtotal       Int
+  totalAmount    Int
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  user           User              @relation("CustomerCheckouts", fields: [userId], references: [id], onDelete: Cascade)
+  bookings       CustomerBooking[]
+
+  @@index([userId, createdAt])
+  @@map("customer_checkouts")
+}
+
+model CustomerBooking {
+  id             String            @id @default(cuid())
+  checkoutId     String?
+  userId         String
+  packageId      String
+  vendorId       String
+  title          String
+  category       String
+  quantity       Int               @default(1)
+  unitPrice      Int
+  priceUnit      String
+  totalPrice     Int
+  eventDate      DateTime          @db.Date
+  eventType      String
+  guestCount     Int
+  message        String?
+  bookingStatus  String            @default("Pending")
+  paymentStatus  String            @default("Pending")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  checkout       CustomerCheckout?  @relation(fields: [checkoutId], references: [id], onDelete: SetNull)
+  user           User               @relation("CustomerBookings", fields: [userId], references: [id], onDelete: Cascade)
+  package        EventPackage       @relation("PackageCustomerBookings", fields: [packageId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([checkoutId])
+  @@index([packageId])
+  @@map("customer_bookings")
+}
+
+model Payment {
+  id             String          @id @default(cuid())
+  bookingId      String
+  provider       PaymentProvider @default(STRIPE)
+  providerRef    String?
+  paymentType    PaymentType
+  amount         Int
+  currency       String          @default("AED")
+  status         PaymentStatus   @default(REQUIRES_PAYMENT_METHOD)
+  clientSecret   String?
+  succeededAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  booking        Booking         @relation(fields: [bookingId], references: [id])
+
+  @@map("payments")
+}
+
+model Refund {
+  id            String   @id @default(cuid())
+  bookingId     String
+  paymentId     String?
+  amount        Int
+  currency      String   @default("AED")
+  refundPercent Int
+  reason        String
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
+
+  booking       Booking  @relation(fields: [bookingId], references: [id])
+
+  @@map("refunds")
+}
+
+model Coupon {
+  id                String     @id @default(cuid())
+  code              String     @unique
+  type              CouponType
+  value             Int
+  maxDiscountAmount Int?
+  currency          String     @default("AED")
+  minOrderAmount    Int        @default(0)
+  active            Boolean    @default(true)
+  expiresAt         DateTime?
+  createdAt         DateTime   @default(now())
+
+  @@map("coupons")
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  bookingId String
+  vendorId  String
+  customerId String
+  rating    Int
+  comment   String
+  status    ReviewStatus @default(PENDING_APPROVAL)
+  createdAt DateTime     @default(now())
+  approvedAt DateTime?
+
+  booking   Booking      @relation(fields: [bookingId], references: [id])
+  customer  User         @relation(fields: [customerId], references: [id])
+
+  @@unique([bookingId, customerId])
+  @@map("reviews")
+}
+
+model Settlement {
+  id               String           @id @default(cuid())
+  bookingId        String
+  vendorId         String
+  grossAmount      Int
+  commissionAmount Int
+  payableAmount    Int
+  currency         String           @default("AED")
+  status           SettlementStatus @default(PENDING_PAYOUT)
+  createdAt        DateTime         @default(now())
+  paidAt           DateTime?
+
+  booking          Booking          @relation(fields: [bookingId], references: [id])
+  vendor           Vendor           @relation(fields: [vendorId], references: [id])
+
+  @@map("settlements")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?
+  channel   String
+  event     String
+  recipient String
+  payload   Json
+  status    String   @default("PENDING")
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model RolePermission {
+  id             String   @id @default(cuid())
+  role           UserRole @unique
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  permissions    Json
+  updatedByUserId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  updatedBy      User?    @relation("RolePermissionsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("role_permissions")
+}
+
+model BlogPost {
+  id                 String     @id @default(cuid())
+  title              String
+  slug               String     @unique
+  excerpt            String?
+  content            String
+  coverImage         String?
+  category           String
+  tags               String[]   @default([])
+  status             BlogStatus @default(DRAFT)
+  isFeatured         Boolean    @default(false)
+  authorName         String?
+  authorAvatar       String?
+  authorBio          String?
+  metaTitle          String?
+  metaDescription    String?
+  ogImage            String?
+  publishedAt        DateTime?
+  readTime           Int        @default(0)
+  relatedServiceIds   String[]   @default([])
+  relatedPackageIds   String[]   @default([])
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([status, category, publishedAt])
+  @@map("blog_posts")
+}
+
+model UserLead {
+  id                   String   @id @default(cuid())
+  fullName             String
+  email                String
+  phone                String
+  eventType            String
+  preferredEventDate   DateTime?
+  expectedGuestCount   Int?
+  budgetRange          Json?
+  servicesNeeded       String[] @default([])
+  additionalDetails    String?
+  status               String   @default("NEW")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("user_leads")
+}
+
+model VendorLead {
+  id                   String   @id @default(cuid())
+  businessName         String
+  yourName             String
+  email                String
+  phone                String
+  websiteSocialMedia   String[] @default([])
+  serviceCategoryId    String?
+  cityId               String?
+  yearsOfExperience    Int?
+  message              String?
+  status               String   @default("NEW")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("vendor_leads")
+}
